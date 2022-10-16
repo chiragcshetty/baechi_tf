@@ -17,6 +17,11 @@ from tensorflow.python.grappler import item as gitem
 
 from image_classifier.networks import nets_factory
 from nmt import model_factory
+#cshetty2:addded
+from transformer import transformer
+from transformer import metrics
+from transformer import model_params
+
 from placer import placer_lib, cost as cost_lib
 from third_party.grappler import graph_placer as grappler_graph_placer
 from utils import logger
@@ -83,6 +88,11 @@ tf.app.flags.DEFINE_integer('num_gpus', 1, 'Number of gpus for NMT.')
 tf.app.flags.DEFINE_boolean('disable_nmt_colocation', False,
                             'Disable the NMT ops colocation.')
 
+###### Transformer #####
+## cshetty2 added
+tf.app.flags.DEFINE_enum(
+    'transformer_type', 'base',['tiny', 'base', 'big'] ,'Type of Transformer') 
+
 
 ##### Grappler ######
 tf.app.flags.DEFINE_boolean('grappler', False, 'Use Grappler.')
@@ -91,6 +101,12 @@ tf.app.flags.DEFINE_integer(
 
 
 _LOGGER = logger.get_logger(__file__)
+
+PARAMS_MAP = {
+    "tiny": model_params.TINY_PARAMS,
+    "base": model_params.BASE_PARAMS,
+    "big": model_params.BIG_PARAMS,
+}
 
 
 def _configure_optimizer(optimizer_name, learning_rate):
@@ -190,10 +206,42 @@ def build_nmt_model(inputs, model_name, **kwargs):
     return loss
 
 
+## cshetty2: added
+def build_transformer_model(inputs, **kwargs):
+    """Builds transformer with the given specs."""
+    # pylint: disable=too-many-locals
+    # log tranformer spec.
+    _LOGGER.info(', '.join(['{}={}'.format(*item) for item in kwargs.items()]))
+
+    with tf.variable_scope("model"):
+        inputs, targets = inputs
+
+        # Create model and get output logits.
+        
+        params = PARAMS_MAP[kwargs.pop('transformer_type')]
+        model = transformer.Transformer(params, True)
+
+        logits = model(inputs, targets)
+
+        logits.set_shape(targets.shape.as_list() + logits.shape.as_list()[2:])
+
+        # Calculate model loss.
+        # xentropy contains the cross entropy loss of every nonpadding token in the
+        # targets.
+        # params["label_smoothing"] = 0.1
+        # params["vocab_size"] = 33708
+        xentropy, weights = metrics.padded_cross_entropy_loss(
+            logits, targets, 0.1, 33708 )
+        loss = tf.reduce_sum(xentropy) / tf.reduce_sum(weights)
+        return loss
+
+
 def build_model(inputs, model_name, data_format, **kwargs):
     """Builds a model with the given specs."""
     if model_name in _NUM_CLASSES:
         return build_image_classifier_model(inputs, model_name, data_format)
+    elif model_name =='transformer':
+        return build_transformer_model(inputs, **kwargs)
 
     return build_nmt_model(inputs, model_name, **kwargs)
 
@@ -389,12 +437,29 @@ def _build_nmt_inputs(batch_size, max_seq_length):
         iterator = dataset.make_one_shot_iterator()
         return iterator.get_next()
 
+def _build_transformer_inputs(batch_size, max_seq_length):
+    input_shape = (batch_size, max_seq_length)
+
+    src_input = np.ones(input_shape, dtype=np.int32)
+    #target_input = np.ones(input_shape, dtype=np.int32)
+    target_output = np.ones(input_shape, dtype=np.int32)
+
+    element = (src_input, target_output)
+
+    with tf.variable_scope('dataset'):
+        dataset = tf.data.Dataset.from_tensors(element).repeat()
+        iterator = dataset.make_one_shot_iterator()
+        return iterator.get_next()
+
 
 def build_inputs(model_name, batch_size, data_format, max_seq_length):
     """Generates dummy inputs."""
     if model_name in _NUM_CLASSES:
         return _build_image_classifier_inputs(
             model_name, batch_size, data_format)
+    elif model_name=='transformer':
+        return _build_transformer_inputs(batch_size, max_seq_length)
+
     return _build_nmt_inputs(batch_size, max_seq_length)
 
 
@@ -525,7 +590,8 @@ def main(unparsed_args):
         encoder_type=FLAGS.encoder_type,
         residual=FLAGS.residual,
         num_gpus=FLAGS.num_gpus,
-        colocation=not FLAGS.disable_nmt_colocation)
+        colocation=not FLAGS.disable_nmt_colocation,
+        transformer_type=FLAGS.transformer_type)
 
     only_forward = FLAGS.only_forward
     _LOGGER.info('Only consider forward ops: %s', str(only_forward))

@@ -113,7 +113,7 @@ bazel build //utils:communication_benchmark
 
 
 ######################################################
-## cifarnet
+## pnasnet/nasnet
 
 ./bazel-bin/train \
     --costgen \
@@ -132,6 +132,38 @@ bazel build //utils:communication_benchmark
     --optimizer=adam \
     --batch_size=8 \
     --model_name=pnasnet_mobile \
+    --num_gpus=4 \
+    --residual \
+    --colocate_grads_with_ops \
+    --only_forward \
+    --placement_method=m_etf \
+    --placer_type=fusion \
+    --grouper=coplace \
+    --comm_cost_coeffs=0.0001754,134 \
+    --memory_fraction=1.0
+
+######################################################
+## transformer
+
+./bazel-bin/train \
+    --costgen \
+    --cost_path=/tmp/cost.pkl \
+    --optimizer=adam \
+    --batch_size=8 \
+    --model_name=transformer \
+    --transformer_type=big \
+    --num_gpus=4 \
+    --residual \
+    --colocate_grads_with_ops \
+    --only_forward;
+
+
+./bazel-bin/train \
+    --cost_path=/tmp/cost.pkl \
+    --optimizer=adam \
+    --batch_size=8 \
+    --model_name=transformer \
+    --transformer_type=big \
     --num_gpus=4 \
     --residual \
     --colocate_grads_with_ops \

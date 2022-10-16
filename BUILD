@@ -9,6 +9,9 @@ py_library(
         "//placer:placer_lib",
         "//third_party/grappler:graph_placer",
         "//utils:logger",
+        "//transformer:transformer",
+        "//transformer:metrics",
+         "//transformer:model_params",
     ],
 )
 
