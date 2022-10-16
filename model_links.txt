@@ -1,0 +1,13 @@
+Thanks to Ubaid Ullah Hafeez for the links
+
+1. Transformer Models 
+https://github.com/tensorflow/models/tree/r2.1.0/official/r1/transformer
+
+2. NASNet
+https://github.com/tensorflow/models/tree/r1.12.0/research/slim
+
+3. RNNLM
+https://github.com/tensorflow/models/tree/r1.12.0/tutorials/rnn/ptb
+
+4. NMT
+https://github.com/tensorflow/nmt
